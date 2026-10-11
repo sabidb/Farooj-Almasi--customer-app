@@ -1,0 +1,26 @@
+{
+  "name": "farooj-almasi-functions",
+  "description": "Cloud Functions for Farooj Almasi — Wave 2.1 (setRole, whoami).",
+  "private": true,
+  "engines": { "node": "22" },
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "lint": "tsc --noEmit",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "test:unit": "node --test test/*.test.mjs",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.0.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

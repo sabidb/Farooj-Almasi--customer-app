@@ -1,0 +1,41 @@
+{
+  "name": "farooj-almasi-customer-app",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "check": "astro check",
+    "test:rules": "firebase emulators:exec --only firestore \"node --test tests/rules/*.test.mjs\"",
+    "bootstrap:owner": "node scripts/set-owner-role.mjs",
+    "migrate:orders": "node scripts/migrate-orders.mjs",
+    "migrate:orders:dry": "node scripts/migrate-orders.mjs --dry-run",
+    "seed:branches": "node scripts/seed-branches.mjs",
+    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes,storage",
+    "deploy:functions": "npm --prefix functions run build && firebase deploy --only functions",
+    "deploy:all": "npm run deploy:rules && npm run deploy:functions",
+    "secret:set:reward-key": "firebase functions:secrets:set REWARD_TOKEN_SIGNING_KEY"
+  },
+  "dependencies": {
+    "@astrojs/react": "^3.6.3",
+    "@astrojs/tailwind": "^5.1.4",
+    "astro": "^4.16.18",
+    "firebase": "^10.14.1",
+    "framer-motion": "^11.11.17",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwindcss": "^3.4.17"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "firebase-admin": "^12.6.0",
+    "firebase-tools": "^13.29.1",
+    "typescript": "^5.7.3"
+  }
+}

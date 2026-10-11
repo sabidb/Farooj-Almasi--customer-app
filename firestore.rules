@@ -1,0 +1,322 @@
+rules_version = '2';
+
+// Farooj Almasi — Firestore rules · Phase 2 (auth-required).
+//
+// Customer app authenticates via Firebase Phone Auth. Every customer path is
+// keyed by phone number and validated against `request.auth.token.phone_number`.
+// Admin app authenticates via email/password; roles live in `users/{uid}` and
+// are read at rule time (custom claims land in Wave 2 once Blaze is enabled).
+//
+// This file must stay in sync with sabidb/farooj-Almasi-admin/firestore.rules.
+// Both apps share one Firebase project (REPLACE_ALMASI_PROJECT_ID).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── helpers ──────────────────────────────────────────────────────────
+    // Auth model: customers get an anonymous Firebase Auth uid on first
+    // visit; customers/{uid} carries their name + phone as profile data.
+    // Staff (owner + branch managers) use email/password Auth; their role
+    // profile lives in users/{uid}.
+
+    function signedIn() { return request.auth != null; }
+
+    function ownsCustomer(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Notifications are still keyed by phone (admin knows the phone from
+    // the order). Verify the caller's customer profile carries that phone.
+    function callerPhoneIs(phone) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/customers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/customers/$(request.auth.uid)).data.get('phone', '') == phone;
+    }
+
+    // The phone the caller declared on their customer profile. Trusted at the
+    // "customer's own history" level only — real phone verification lands in
+    // Phase 10. Empty string if no customer doc yet (blocks the rule below).
+    function callerPhone() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/customers/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/customers/$(request.auth.uid)).data.get('phone', '')
+        : '';
+    }
+
+    function isStaff() {
+      // Owner + branch manager both count as staff. Read the role from users/{uid}.
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['owner', 'branch'];
+    }
+
+    function isOwner() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'owner';
+    }
+
+    function staffBranch() {
+      return signedIn()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('branchId', '')
+        : '';
+    }
+
+    function isBranchStaff(branchId) {
+      return isOwner() || (isStaff() && staffBranch() == branchId);
+    }
+
+    // ── collections ──────────────────────────────────────────────────────
+
+    // Live menu, restaurant open/closed, announcement, per-branch invoice/printer
+    // configs, coupons config. PUBLIC READ so the customer can see the menu
+    // before signing in (menu is public info; browsers hit this on first load).
+    // Owner-only write.
+    match /settings/{doc} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
+    // Branches — PUBLIC READ for the customer branch picker (shown before
+    // sign-in). Owner creates/deletes/renames; branch manager can edit only
+    // their own branch's mutable fields (hours, phone, address, active flag,
+    // prep minutes). Phase 4 mirrors the client-side validateBranch guard.
+    match /branches/{branchId} {
+      allow read: if true;
+      allow create: if isOwner()
+        && request.resource.data.nameEn is string
+        && request.resource.data.nameEn.size() > 0
+        && request.resource.data.nameAr is string
+        && request.resource.data.nameAr.size() > 0;
+      // Owner can rewrite anything (renames, deactivation, address, hours…).
+      // A branch admin can update only *their own* branch and only mutable
+      // operational fields — never rename, never change branchId semantics.
+      allow update: if isOwner()
+        || (isStaff() && staffBranch() == branchId
+            && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['phone', 'address', 'openHours', 'closeHours',
+                           'hours', 'prepMinutes', 'active', 'notes',
+                           'updatedAt', 'updatedBy']));
+      allow delete: if isOwner();
+    }
+
+    // Owner-only audit trail. Written server-side (Admin SDK) by the
+    // staff-provisioning callables and future sensitive actions; direct
+    // client writes are denied. Owner reads for review; branch staff
+    // never see other branches' actions.
+    match /auditLogs/{id} {
+      allow read: if isOwner();
+      allow write: if false;
+    }
+
+    // Customer profiles keyed by Firebase Auth uid (anonymous). Owning
+    // customer OR any staff may write. Read also allowed when the doc's
+    // phone equals the caller's declared phone — a re-installed customer
+    // needs to see sibling docs on the same phone to aggregate their
+    // loyalty points (Phase 10 will merge sibling docs server-side).
+    match /customers/{uid} {
+      allow read: if ownsCustomer(uid)
+        || (callerPhone() != '' && resource.data.get('phone', '') == callerPhone())
+        || isStaff();
+      allow write: if ownsCustomer(uid) || isStaff();
+    }
+
+    // Orders — Phase 5 locks direct client creates. The submitOrder Cloud
+    // Function is the only writer: it validates prices, availability, branch
+    // and totals from the trusted menu doc, mints the orderNo atomically, and
+    // uses the Admin SDK (which bypasses these rules). A manipulated client
+    // bundle cannot fabricate an order any more.
+    match /orders/{orderId} {
+      allow create: if false;
+
+      // Read stays wide: owning uid, owning phone (so history survives a
+      // re-install / new device), or branch-scoped staff.
+      allow read: if (signedIn() && resource.data.get('userUid', '') == request.auth.uid)
+        || (callerPhone() != '' && resource.data.get('userPhone', '') == callerPhone())
+        || isBranchStaff(resource.data.branch);
+
+      // Customer-side updates are limited to attaching a rating. Everything
+      // else (status, statusHistory, totals, driver info, refund block) must
+      // go through the updateOrderStatus / refundOrder callables so the
+      // transition table + audit trail apply — the field allowlist below
+      // keeps staff from silently rewriting money fields via a direct patch.
+      allow update: if signedIn()
+        && resource.data.get('userUid', '') == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating']);
+      allow update: if isBranchStaff(resource.data.branch)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+             .hasAny(['status', 'statusHistory', 'orderNo', 'userUid', 'userPhone',
+                      'branch', 'items', 'totals', 'total', 'clientOrderId',
+                      'createdAt', 'refund', 'submittedVia']);
+
+      allow delete: if isOwner();
+    }
+
+    // Per-branch atomic order-number counters (orderNo-{branchId}).
+    // Phase 5 mints these inside the submitOrder callable via the Admin SDK,
+    // so direct writes are no longer needed. Reads stay open to signed-in
+    // callers for diagnostics.
+    match /counters/{counterId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // Coupons catalog: PUBLIC READ (codes are already embedded in the customer
+    // bundle; Phase 10 moves redemption server-side and locks per-customer
+    // limits there). Owner writes.
+    match /coupons/{code} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
+    // Customer inbox notifications — still keyed by phone (admin sends
+    // by phone from an order). Verify the caller's customer profile
+    // carries that phone.
+    match /notifications/{phone}/items/{itemId} {
+      allow read, update: if callerPhoneIs(phone) || isStaff();
+      allow create: if isStaff();
+      allow delete: if isOwner();
+    }
+
+    // Staff role profiles. Any signed-in admin reads the roster (needed to
+    // render "Staff Management"). Owner-only writes so a branch manager can't
+    // promote themselves.
+    match /users/{uid} {
+      allow read: if isStaff();
+      allow write: if isOwner();
+    }
+
+    // Phase 9: dispatch audit log. Only server-side callables write via the
+    // Admin SDK (dedup + push outcome). Staff can read to debug delivery.
+    match /notifications_log/{key} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    // Phase 10: reward rules — owner-managed. Customers never touch these.
+    match /rewardRules/{id} {
+      allow read: if isStaff();
+      allow write: if isOwner();
+    }
+
+    // Phase 10: issued reward records. Customer reads their own; staff reads
+    // any (support / debugging). Writes are server-only — the engine's
+    // budgeted issuance + Phase 11's atomic redemption go through callables.
+    match /rewards/{id} {
+      allow read: if isStaff()
+        || (signedIn() && resource.data.get('customerUid', '') == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Phase 11: 12-char reward tokens. Customer reads only tokens keyed to
+    // their own uid (so the app can render "your available rewards");
+    // writes go through validateRewardCode / reserveRewardCode /
+    // (implicit) redeem-during-submitOrder callables — never client-direct.
+    match /rewardTokens/{code} {
+      allow read: if isStaff()
+        || (signedIn() && resource.data.get('customerUid', '') == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Phase 12: immutable points ledger. Customer reads only their own
+    // entries; staff reads any (support / audit). ALL writes go through
+    // appendLedger via the callable — direct writes would break the
+    // before/after invariant and the balance mirror on customers/{uid}.
+    match /pointsLedger/{id} {
+      allow read: if isStaff()
+        || (signedIn() && resource.data.get('customerUid', '') == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Phase 13 Wave A — per-customer lifetime-aggregate sentinels
+    // (customers/{uid}/lifetimeAggregates/{orderId}). Written server-side
+    // only; customer reads their own to eyeball tier calculations, staff
+    // reads any for support.
+    match /customers/{uid}/lifetimeAggregates/{orderId} {
+      allow read: if ownsCustomer(uid) || isStaff();
+      allow write: if false;
+    }
+
+    // Phase 13 Wave B — per-customer streak-order sentinels
+    // (customers/{uid}/streakOrders/{orderId}). Same access pattern.
+    match /customers/{uid}/streakOrders/{orderId} {
+      allow read: if ownsCustomer(uid) || isStaff();
+      allow write: if false;
+    }
+
+    // Phase 13 Wave C — missions catalog. PUBLIC READ so the customer app
+    // can render the "Today's missions" card before signing in (kind +
+    // reward.label are already non-sensitive). Owner-only writes through
+    // the saveMission callable — direct writes blocked.
+    match /missions/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Phase 13 Wave C — per-customer mission state
+    // (customerMissions/{missionId__uid}). Customer reads only their own
+    // rows (matched via customerUid field), staff reads any. Writes are
+    // server-only via the mission evaluator.
+    match /customerMissions/{id} {
+      allow read: if isStaff()
+        || (signedIn() && resource.data.get('customerUid', '') == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Phase 14 — referral codes reverse index (referralCodes/{code}).
+    // NO client reads: exposing this would let a farmer harvest codes.
+    // Attach-time validation goes through the attachReferralCode callable
+    // which reads via the Admin SDK.
+    match /referralCodes/{code} {
+      allow read, write: if false;
+    }
+
+    // Phase 14 — referrals ledger (referrals/{id}).
+    // Customer reads only rows where they are either party (referrer or
+    // referee) so both sides can see conversion progress. Staff reads any.
+    // Writes server-only (attachReferralCode + qualifyReferralOnOrder).
+    match /referrals/{id} {
+      allow read: if isStaff()
+        || (signedIn() && resource.data.get('referrerUid', '') == request.auth.uid)
+        || (signedIn() && resource.data.get('refereeUid', '') == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Phase 16 — marketing segments (top-level collection). Staff read
+    // to render the Marketing tab; owner-only writes come through the
+    // saveSegment / deleteSegment callables. Direct writes are denied so
+    // a compromised admin session can't bypass callable validation.
+    match /segments/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    // Phase 16 — marketing campaigns (top-level collection). Same access
+    // model as segments — staff read, callables write.
+    match /campaigns/{id} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    // Phase 16 — per-(campaign,customer) issuance ledger. Staff reads any
+    // for operator dashboards; a customer reads their own so the app can
+    // show "you have a campaign reward". Writes server-only.
+    match /campaignRewards/{id} {
+      allow read: if isStaff()
+        || (signedIn() && resource.data.get('customerUid', '') == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Phase 16 — audit trail. Owner-only reads (finance/ops review).
+    // Writes server-only.
+    match /campaignEvents/{id} {
+      allow read: if isOwner();
+      allow write: if false;
+    }
+
+    // Everything else denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
