@@ -23,7 +23,7 @@ Paste ~64 random characters when prompted (`openssl rand -hex 32` produces a goo
 
 ## Path A · Cloud Shell (~5 min)
 
-1. Open **<https://shell.cloud.google.com/?project=REPLACE_ALMASI_PROJECT_ID>** (sign in with your Firebase owner account if prompted).
+1. Open **<https://shell.cloud.google.com/?project=farooj-almasii>** (sign in with your Firebase owner account if prompted).
 2. Clone + check out:
    ```
    git clone https://github.com/sabidb/farooj-almasi-customer-app
@@ -38,7 +38,7 @@ Paste ~64 random characters when prompted (`openssl rand -hex 32` produces a goo
 4. **First-time only:** set the signing secret (see section above).
 5. **Deploy everything** — rules, indexes, storage rules, and functions:
    ```
-   firebase use REPLACE_ALMASI_PROJECT_ID
+   firebase use farooj-almasii
    npm run deploy:all
    ```
    Ends with `✔ Deploy complete!` twice (once for rules, once for functions).
@@ -66,7 +66,7 @@ Cloud Shell is ephemeral; the clone disappears when the shell times out. That's 
 cd farooj-almasi-customer-app
 npm install
 npm --prefix functions install
-firebase use REPLACE_ALMASI_PROJECT_ID
+firebase use farooj-almasii
 
 # First time only
 npm run secret:set:reward-key

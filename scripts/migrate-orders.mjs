@@ -26,7 +26,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const PROJECT_ID = 'REPLACE_ALMASI_PROJECT_ID';
+const PROJECT_ID = 'farooj-almasii';
 const BATCH_SIZE = 400;
 const DRY_RUN = process.argv.includes('--dry-run');
 

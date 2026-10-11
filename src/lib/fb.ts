@@ -42,29 +42,27 @@ import { validateCustomer, validateBranch, SchemaError } from './schema';
 import { deleteDoc } from 'firebase/firestore';
 
 // ───────────────────────────────────────────────────────────────────────────
-// TODO(Farooj Almasi): paste the config from YOUR new Firebase project here.
-// Firebase Console → Project settings → General → "Your apps" → Web app → SDK
-// setup and configuration → "Config". This MUST be the Almasi project, NOT the
-// Al-Bahr project — the two companies keep fully separate databases.
-// The whole init below is wrapped in try/catch, so until these are filled the
-// app still loads and runs on its local fallback data (menu/branches empty).
+// Farooj Almasi Firebase project (`farooj-almasii`). These are the public web
+// config values — safe to ship in the client bundle; real protection comes from
+// the Firestore security rules. Separate project from Al-Bahr (no shared data).
 // ───────────────────────────────────────────────────────────────────────────
 const firebaseConfig = {
-  apiKey: 'REPLACE_WITH_ALMASI_API_KEY',
-  authDomain: 'REPLACE_ALMASI_PROJECT_ID.firebaseapp.com',
-  projectId: 'REPLACE_ALMASI_PROJECT_ID',
-  storageBucket: 'REPLACE_ALMASI_PROJECT_ID.firebasestorage.app',
-  messagingSenderId: 'REPLACE_WITH_ALMASI_SENDER_ID',
-  appId: 'REPLACE_WITH_ALMASI_APP_ID',
+  apiKey: 'AIzaSyAWGLQwsO_n241zYOXaNNamwVcLlcv8z74',
+  authDomain: 'farooj-almasii.firebaseapp.com',
+  projectId: 'farooj-almasii',
+  storageBucket: 'farooj-almasii.firebasestorage.app',
+  messagingSenderId: '444843232564',
+  appId: '1:444843232564:web:2a5f73eefa25048ef4a961',
+  measurementId: 'G-NVZBHZCK4H',
 };
 
 // App Check (reCAPTCHA v3) site key. Public by design (ships in the JS bundle).
 // Overridable per environment via `PUBLIC_APP_CHECK_SITE_KEY`.
-// TODO(Farooj Almasi): register a reCAPTCHA v3 site key for the Almasi project
-// and paste it here (or leave the placeholder — App Check init fails open).
+// Not yet registered for Farooj Almasi — left empty, so App Check init is skipped
+// (fails open). Register a reCAPTCHA v3 key and set it here to enable it.
 const APP_CHECK_SITE_KEY =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.PUBLIC_APP_CHECK_SITE_KEY) ||
-  'REPLACE_WITH_ALMASI_RECAPTCHA_SITE_KEY';
+  '';
 
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
@@ -91,8 +89,9 @@ try {
   // Callables live in me-west1 alongside Firestore. Phase 5 uses `submitOrder`
   // and `updateOrderStatus` for server-side order writes.
   try { fns = getFunctions(app, 'me-west1'); } catch { fns = null; }
-  // App Check runs in the browser only; skip during SSR / tests.
-  if (typeof window !== 'undefined') {
+  // App Check runs in the browser only; skip during SSR / tests, and skip
+  // entirely until a reCAPTCHA v3 site key is configured (fail open).
+  if (typeof window !== 'undefined' && APP_CHECK_SITE_KEY) {
     try {
       initializeAppCheck(app, {
         provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY),

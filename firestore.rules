@@ -8,7 +8,7 @@ rules_version = '2';
 // are read at rule time (custom claims land in Wave 2 once Blaze is enabled).
 //
 // This file must stay in sync with sabidb/farooj-Almasi-admin/firestore.rules.
-// Both apps share one Firebase project (REPLACE_ALMASI_PROJECT_ID).
+// Both apps share one Firebase project (farooj-almasii).
 
 service cloud.firestore {
   match /databases/{database}/documents {

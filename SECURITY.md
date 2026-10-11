@@ -98,5 +98,5 @@ Run these against production once a month:
 ## Contacts
 
 - Security incidents: owner
-- App Check dashboard: Firebase Console → App Check → REPLACE_ALMASI_PROJECT_ID
+- App Check dashboard: Firebase Console → App Check → farooj-almasii
 - Rules audit: `firestore.rules` (mirrored in both repos)

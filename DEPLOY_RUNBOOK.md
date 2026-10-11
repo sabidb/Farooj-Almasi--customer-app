@@ -15,7 +15,7 @@ Two apps, one Firebase project, two Vercel projects.
 ```
 npm install -g firebase-tools
 firebase login
-firebase use REPLACE_ALMASI_PROJECT_ID      # sets the active project
+firebase use farooj-almasii      # sets the active project
 firebase functions:secrets:set REWARD_TOKEN_SIGNING_KEY   # already set — rotate only deliberately
 ```
 
@@ -62,7 +62,7 @@ Vercel handles the two apps automatically on `git push origin main`.
 
 - Firestore: enable **daily scheduled export** from the Firebase console
   → Firestore → Data → Import/Export. Export target is a GCS bucket
-  named `gs://REPLACE_ALMASI_PROJECT_ID-backups`.
+  named `gs://farooj-almasii-backups`.
 - Retain 30 daily snapshots + 12 monthly.
 - Restore drill: monthly, restore one snapshot into a scratch Firebase
   project and diff the customer/order counts.

@@ -13,7 +13,7 @@ import { initializeApp, cert, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import fs from 'node:fs';
 
-const PROJECT_ID = 'REPLACE_ALMASI_PROJECT_ID';
+const PROJECT_ID = 'farooj-almasii';
 
 // Farooj Almasi launches with NO seeded branches — add real branches from the
 // admin app (Settings → Branches). This template is here only if you ever want

@@ -4,7 +4,7 @@
 // Two ways to authenticate:
 //
 //   A) Cloud Shell (easiest — nothing to download):
-//        Open https://shell.cloud.google.com/?project=REPLACE_ALMASI_PROJECT_ID
+//        Open https://shell.cloud.google.com/?project=farooj-almasii
 //        git clone https://github.com/sabidb/farooj-almasi-customer-app && cd farooj-almasi-customer-app
 //        npm install
 //        gcloud auth application-default login   # only if not already set
@@ -23,7 +23,7 @@ import { getAuth } from 'firebase-admin/auth';
 import fs from 'node:fs';
 
 const OWNER_UID = 'kNrKfoWI83VAICymBRXPa9TYKDj1';
-const PROJECT_ID = 'REPLACE_ALMASI_PROJECT_ID';
+const PROJECT_ID = 'farooj-almasii';
 
 const credsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 if (credsPath) {

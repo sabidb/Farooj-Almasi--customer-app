@@ -20,7 +20,7 @@ import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebas
 import { doc, getDoc, setDoc, addDoc, updateDoc, collection } from 'firebase/firestore';
 import { describe, before, after, it } from 'node:test';
 
-const PROJECT_ID = 'REPLACE_ALMASI_PROJECT_ID-rules-test';
+const PROJECT_ID = 'farooj-almasii-rules-test';
 let env;
 
 before(async () => {
